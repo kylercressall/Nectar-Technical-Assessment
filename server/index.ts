@@ -3,15 +3,32 @@ import express from "express";
 import { PrismaClient } from "@prisma/client";
 import path from "path";
 
+import { z } from "zod";
+
 const prisma = new PrismaClient();
 const app = express();
 
 app.use(express.json());
 
+const CreateUserSchema = z.object({
+  first_name: z.string().min(1),
+  last_name: z.string().min(1),
+  email: z.string(),
+  active: z.boolean(),
+  username: z.string().optional(),
+  country: z.string().length(2).toUpperCase().optional(),
+});
+
 app.post("/api/users", async (req, res, _) => {
   try {
-    const { first_name, email, last_name, active, country, username } =
-      req.body;
+    const parsed = CreateUserSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: z.treeifyError(parsed.error) });
+      return;
+    }
+
+    const { first_name, email, last_name, active, username, country } =
+      parsed.data;
     const newUser = await prisma.user.create({
       data: {
         first_name,
