@@ -1,0 +1,16 @@
+# IDE / editor
+.idea/
+*.iml
+
+# macOS
+.DS_Store
+
+# Build output
+dist/
+
+# Dependencies
+node_modules/
+
+# Env
+.env
+.env.local

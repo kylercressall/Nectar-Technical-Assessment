@@ -1,0 +1,7 @@
+.env
+node_modules
+
+# SQLite dev database — generated per-candidate via `npm run migrate-deploy`
+prisma/dev.db
+prisma/dev.db-journal
+

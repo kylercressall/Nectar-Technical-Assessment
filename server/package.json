@@ -1,0 +1,27 @@
+{
+  "name": "nectarhr-assesment",
+  "version": "0.0.1",
+  "description": "This is the take home assessment for interviewing at NectarHR",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "nodemon --exec ts-node index.ts --ignore 'node_modules/*'",
+    "migrate-deploy": "npx prisma migrate deploy && npx prisma generate",
+    "db-push": "npx prisma db push"
+  },
+  "keywords": [],
+  "author": "",
+  "devDependencies": {
+    "nodemon": "^3.1.9",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.2"
+  },
+  "dependencies": {
+    "@faker-js/faker": "^9.6.0",
+    "@prisma/client": "^6.5.0",
+    "@types/express": "^5.0.1",
+    "dotenv": "^17.4.2",
+    "express": "^4.21.2",
+    "prisma": "^6.5.0"
+  }
+}
