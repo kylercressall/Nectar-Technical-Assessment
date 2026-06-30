@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import { PrismaClient } from "@prisma/client";
 import path from "path";
+import rateLimit from "express-rate-limit";
 
 import { z } from "zod";
 
@@ -10,6 +11,17 @@ const app = express();
 
 app.use(express.json());
 
+// setup rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // 100 requests per window per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use("/api", limiter);
+
+// Create User
 const CreateUserSchema = z.object({
   first_name: z.string().min(1),
   last_name: z.string().min(1),
@@ -46,8 +58,8 @@ app.post("/api/users", async (req, res, _) => {
   }
 });
 
-// /api/users?country=US
-//     optional paginate with limit and offset
+// get all users /api/users?country=US
+//     optional paginate with limit and offset, and country filter
 app.get("/api/users", async (req, res) => {
   try {
     const { country, limit = "50", offset = "0" } = req.query;
