@@ -35,7 +35,44 @@ const STATE_NAMES: Record<string, string> = {
   VA: 'Virginia', WA: 'Washington', WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming',
 }
 
+const ALL_STATES = Object.entries(STATE_NAMES).map(([code, name]) => ({ code, name }))
+
 const displayedState = ref('')
+const query = ref('')
+const showDropdown = ref(false)
+const periods = ref<Period[]>([])
+const loading = ref(false)
+const error = ref('')
+const searched = ref(false)
+
+const filtered = computed(() => {
+  const q = query.value.trim().toLowerCase()
+  if (!q) return ALL_STATES
+  return ALL_STATES.filter(
+    s => s.code.toLowerCase().startsWith(q) || s.name.toLowerCase().includes(q)
+  )
+})
+
+function selectState(code: string, name: string) {
+  query.value = `${name} (${code})`
+  showDropdown.value = false
+  fetchWeather(code)
+}
+
+function onFocus() {
+  query.value = ''
+  showDropdown.value = true
+}
+
+function onBlur() {
+  setTimeout(() => {
+    showDropdown.value = false
+    if (displayedState.value) {
+      const name = STATE_NAMES[displayedState.value]
+      query.value = name ? `${name} (${displayedState.value})` : displayedState.value
+    }
+  }, 150)
+}
 
 function formatDate(isoString: string): string {
   const d = new Date(isoString)
@@ -48,12 +85,6 @@ function dayLabel(day: Period | null, night: Period | null): string {
   return ''
 }
 
-const stateInput = ref('')
-const periods = ref<Period[]>([])
-const loading = ref(false)
-const error = ref('')
-const searched = ref(false)
-
 const dayPairs = computed<DayPair[]>(() => {
   const pairs: DayPair[] = []
   let i = 0
@@ -63,8 +94,7 @@ const dayPairs = computed<DayPair[]>(() => {
     if (current.isDaytime) {
       const night = next ?? null
       pairs.push({
-        day: current,
-        night,
+        day: current, night,
         isToday: pairs.length === 0,
         label: dayLabel(current, night),
         date: formatDate(current.startTime),
@@ -72,8 +102,7 @@ const dayPairs = computed<DayPair[]>(() => {
       i += night ? 2 : 1
     } else {
       pairs.push({
-        day: null,
-        night: current,
+        day: null, night: current,
         isToday: pairs.length === 0,
         label: dayLabel(null, current),
         date: formatDate(current.startTime),
@@ -87,17 +116,14 @@ const dayPairs = computed<DayPair[]>(() => {
 onMounted(() => {
   const saved = localStorage.getItem('lastWeatherState')
   if (saved) {
-    stateInput.value = saved
-    fetchWeather()
+    const name = STATE_NAMES[saved]
+    query.value = name ? `${name} (${saved})` : saved
+    fetchWeather(saved)
   }
 })
 
-async function fetchWeather() {
-  const state = stateInput.value.trim().toUpperCase()
-  if (!state || state.length !== 2) {
-    error.value = 'Enter a valid 2-letter state code.'
-    return
-  }
+async function fetchWeather(stateCode: string) {
+  const state = stateCode.trim().toUpperCase()
   loading.value = true
   error.value = ''
   searched.value = true
@@ -123,72 +149,83 @@ async function fetchWeather() {
 <template>
   <div class="page">
     <h1>Weather Forecast</h1>
-    <p class="subtitle">Enter a US state code to get the current forecast.</p>
+    <p class="subtitle">Search by state name or code.</p>
 
     <div class="search">
-      <input
-        v-model="stateInput"
-        placeholder="State code (e.g. CA)"
-        maxlength="2"
-        @keyup.enter="fetchWeather"
-      />
-      <button @click="fetchWeather">Get Forecast</button>
+      <div class="combobox">
+        <input
+          v-model="query"
+          placeholder="e.g. Utah or UT"
+          @focus="onFocus"
+          @blur="onBlur"
+        />
+        <ul v-if="showDropdown && filtered.length > 0" class="dropdown">
+          <li
+            v-for="s in filtered"
+            :key="s.code"
+            @mousedown="selectState(s.code, s.name)"
+          >
+            <span class="opt-name">{{ s.name }}</span>
+            <span class="opt-code">{{ s.code }}</span>
+          </li>
+        </ul>
+      </div>
     </div>
 
     <p v-if="error" class="error">{{ error }}</p>
     <div v-else-if="loading" class="spinner-wrap"><div class="spinner" /></div>
 
     <template v-else-if="dayPairs.length > 0">
-    <h2 class="state-heading">{{ STATE_NAMES[displayedState] ?? displayedState }} Forecast</h2>
-    <div class="grid">
-      <div
-        v-for="(pair, idx) in dayPairs"
-        :key="idx"
-        class="day-card"
-        :class="{ today: pair.isToday }"
-      >
-        <div class="card-label">
-          <span class="label-name">{{ pair.label }}</span>
-          <span class="label-date">{{ pair.date }}</span>
-        </div>
-
-        <div v-if="pair.day" class="half">
-          <div class="half-header">
-            <span class="period-tag">Day</span>
-            <span class="temp">{{ pair.day.temperature }}°{{ pair.day.temperatureUnit }}</span>
+      <h2 class="state-heading">{{ STATE_NAMES[displayedState] ?? displayedState }} Forecast</h2>
+      <div class="grid">
+        <div
+          v-for="(pair, idx) in dayPairs"
+          :key="idx"
+          class="day-card"
+          :class="{ today: pair.isToday }"
+        >
+          <div class="card-label">
+            <span class="label-name">{{ pair.label }}</span>
+            <span class="label-date">{{ pair.date }}</span>
           </div>
-          <div class="meta">
-            <img :src="pair.day.icon" class="wx-icon" alt="" />
-            <div>
-              <p class="forecast">{{ pair.day.shortForecast }}</p>
-              <p class="wind">Wind: {{ pair.day.windSpeed }} {{ pair.day.windDirection }}</p>
-              <p v-if="pair.day.probabilityOfPrecipitation.value !== null" class="precip">
-                Rain: {{ pair.day.probabilityOfPrecipitation.value }}%
-              </p>
+
+          <div v-if="pair.day" class="half">
+            <div class="half-header">
+              <span class="period-tag">Day</span>
+              <span class="temp">{{ pair.day.temperature }}°{{ pair.day.temperatureUnit }}</span>
+            </div>
+            <div class="meta">
+              <img :src="pair.day.icon" class="wx-icon" alt="" />
+              <div>
+                <p class="forecast">{{ pair.day.shortForecast }}</p>
+                <p class="wind">Wind: {{ pair.day.windSpeed }} {{ pair.day.windDirection }}</p>
+                <p v-if="pair.day.probabilityOfPrecipitation.value !== null" class="precip">
+                  Rain: {{ pair.day.probabilityOfPrecipitation.value }}%
+                </p>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div v-if="pair.day && pair.night" class="divider" />
+          <div v-if="pair.day && pair.night" class="divider" />
 
-        <div v-if="pair.night" class="half">
-          <div class="half-header">
-            <span class="period-tag">Night</span>
-            <span class="temp night-temp">{{ pair.night.temperature }}°{{ pair.night.temperatureUnit }}</span>
-          </div>
-          <div class="meta">
-            <img :src="pair.night.icon" class="wx-icon" alt="" />
-            <div>
-              <p class="forecast">{{ pair.night.shortForecast }}</p>
-              <p class="wind">Wind: {{ pair.night.windSpeed }} {{ pair.night.windDirection }}</p>
-              <p v-if="pair.night.probabilityOfPrecipitation.value !== null" class="precip">
-                Rain: {{ pair.night.probabilityOfPrecipitation.value }}%
-              </p>
+          <div v-if="pair.night" class="half">
+            <div class="half-header">
+              <span class="period-tag">Night</span>
+              <span class="temp night-temp">{{ pair.night.temperature }}°{{ pair.night.temperatureUnit }}</span>
+            </div>
+            <div class="meta">
+              <img :src="pair.night.icon" class="wx-icon" alt="" />
+              <div>
+                <p class="forecast">{{ pair.night.shortForecast }}</p>
+                <p class="wind">Wind: {{ pair.night.windSpeed }} {{ pair.night.windDirection }}</p>
+                <p v-if="pair.night.probabilityOfPrecipitation.value !== null" class="precip">
+                  Rain: {{ pair.night.probabilityOfPrecipitation.value }}%
+                </p>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
     </template>
 
     <p v-else-if="searched && !loading" class="muted">No forecast data available.</p>
@@ -200,25 +237,47 @@ async function fetchWeather() {
 h1 { font-size: 1.6rem; margin-bottom: 0.25rem; }
 .subtitle { color: #666; margin-bottom: 1.25rem; font-size: 0.95rem; }
 
-.search { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
-.search input {
+.search { margin-bottom: 1.5rem; }
+
+.combobox { position: relative; width: 280px; }
+.combobox input {
+  width: 100%;
   padding: 0.45rem 0.75rem;
   border: 1px solid #ccc;
   border-radius: 6px;
   font-size: 0.95rem;
-  width: 180px;
-  text-transform: uppercase;
+  font-family: inherit;
+  box-sizing: border-box;
 }
-.search button {
-  padding: 0.45rem 1rem;
-  background: #2c7a4b;
-  color: white;
-  border: none;
-  border-radius: 6px;
+.combobox input:focus { outline: none; border-color: #2c7a4b; box-shadow: 0 0 0 2px #2c7a4b22; }
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+  max-height: 240px;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0;
+  z-index: 100;
+}
+.dropdown li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
   cursor: pointer;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
-.search button:hover { background: #236040; }
+.dropdown li:hover { background: #f0fdf6; }
+.opt-name { color: #111827; }
+.opt-code { color: #9ca3af; font-size: 0.8rem; font-weight: 600; }
 
 .state-heading { font-size: 1.4rem; font-weight: 700; margin: 0 0 1rem; color: #111827; }
 .grid {
@@ -238,7 +297,6 @@ h1 { font-size: 1.6rem; margin-bottom: 0.25rem; }
   transform: translateY(-3px);
   box-shadow: 0 6px 20px rgba(0,0,0,0.08);
 }
-
 .day-card.today {
   border-color: #2c7a4b;
   box-shadow: 0 0 0 2px #2c7a4b22;
@@ -253,23 +311,12 @@ h1 { font-size: 1.6rem; margin-bottom: 0.25rem; }
   border-bottom: 2px solid #e5e7eb;
   background: #f4f4f5;
 }
-
-.today .card-label {
-  background: #dcfce7;
-  border-bottom-color: #bbf7d0;
-}
-
+.today .card-label { background: #dcfce7; border-bottom-color: #bbf7d0; }
 .label-name { font-weight: 700; font-size: 0.9rem; color: #111827; }
 .label-date { font-size: 0.8rem; color: #6b7280; }
 
 .half { padding: 0.75rem 1rem; }
-
-.divider {
-  height: 1px;
-  background: #e5e7eb;
-  margin: 0 1rem;
-}
-
+.divider { height: 1px; background: #e5e7eb; margin: 0 1rem; }
 .today .divider { background: #bbf7d0; }
 
 .half-header {
@@ -278,7 +325,6 @@ h1 { font-size: 1.6rem; margin-bottom: 0.25rem; }
   align-items: baseline;
   margin-bottom: 0.4rem;
 }
-
 .period-tag {
   font-size: 0.75rem;
   font-weight: 600;
@@ -286,13 +332,11 @@ h1 { font-size: 1.6rem; margin-bottom: 0.25rem; }
   letter-spacing: 0.05em;
   color: #6b7280;
 }
-
 .temp { font-size: 1.2rem; font-weight: 700; color: #2c7a4b; }
 .night-temp { color: #6366f1; }
 
 .meta { display: flex; align-items: flex-start; gap: 0.5rem; }
 .wx-icon { width: 40px; height: 40px; flex-shrink: 0; border-radius: 6px; }
-
 .forecast { font-size: 0.84rem; color: #4b5563; margin: 0 0 0.2rem; }
 .wind { font-size: 0.78rem; color: #9ca3af; margin: 0 0 0.2rem; }
 .precip { font-size: 0.78rem; color: #3b82f6; margin: 0; }

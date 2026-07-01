@@ -3,6 +3,9 @@
   "version": "0.0.1",
   "description": "This is the take home assessment for interviewing at NectarHR",
   "main": "index.js",
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "nodemon --exec ts-node index.ts --ignore 'node_modules/*'",
